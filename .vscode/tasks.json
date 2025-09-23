@@ -1,0 +1,24 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "build with OpenSSL",
+      "type": "shell",
+      "command": "gcc",
+      "args": [
+        "${workspaceFolder}/main.c",
+        "-I/opt/homebrew/opt/openssl@3/include",
+        "-L/opt/homebrew/opt/openssl@3/lib",
+        "-lssl",
+        "-lcrypto",
+        "-o",
+        "${workspaceFolder}/main"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$gcc"]
+    }
+  ]
+}

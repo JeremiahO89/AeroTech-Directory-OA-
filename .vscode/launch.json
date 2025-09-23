@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    
+    {
+      "name": "Run main",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "/Users/jeremiahondrasik/Library/CloudStorage/OneDrive-ThePennsylvaniaStateUniversity/Code/AeroTech-Directory-OA-/main",
+      "args": [],                  // you can add command-line arguments here
+      "stopAtEntry": false,
+      "cwd": "/Users/jeremiahondrasik/Library/CloudStorage/OneDrive-ThePennsylvaniaStateUniversity/Code/AeroTech-Directory-OA-/",
+      "environment": [],
+      "externalConsole": true,     // open a terminal window for input/output
+      "MIMode": "lldb",
+      "preLaunchTask": "build with OpenSSL"  // runs your tasks.json build first
+    }
+  ]
+}
