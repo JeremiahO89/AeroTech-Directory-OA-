@@ -4,13 +4,11 @@
 #include <dirent.h>
 #include <openssl/sha.h>
 
-
 typedef struct HashNode {
     unsigned char hash[SHA256_DIGEST_LENGTH];
     char *filepath;
     struct HashNode *next;
 } HashNode;
-
 
 HashNode* create_hash_node(unsigned char hash[SHA256_DIGEST_LENGTH], const char *filepath) {
     HashNode *new_node = malloc(sizeof(HashNode));
@@ -53,78 +51,75 @@ int compute_sha256(const char *filepath, unsigned char hash[SHA256_DIGEST_LENGTH
     return 1;
 }
 
-HashNode *dir1_hash_list = NULL;
-HashNode *dir1_end_node = NULL;
-HashNode *dir2_hash_list = NULL;
-HashNode *dir2_end_node = NULL;
+int read_directory(const char *path, const char *relative_path, HashNode **head, HashNode **tail) {
+    char *full_path = malloc(strlen(path) + 1 + strlen(relative_path) + 1);
+    if (strlen(relative_path) == 0)
+        sprintf(full_path, "%s", path);
+    else
+        sprintf(full_path, "%s/%s", path, relative_path);
 
-
-int read_directory(const char *path, const char *relative_path) {
-    char *full_path = malloc(strlen(relative_path) + 1 + strlen(path) + 1);
-    sprintf(full_path, "%s/%s", path, relative_path);
     DIR *dir = opendir(full_path);
     free(full_path);
 
-    if (dir == NULL) {
+    if (!dir) {
         printf("No Directory found at: %s/%s\n", path, relative_path);
         return -1;
     }
+
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
         if (entry->d_name[0] == '.' && (entry->d_name[1] == '\0' || // Skip "."
-            (entry->d_name[1] == '.' && entry->d_name[2] == '\0'))){ // Skip ".."
+            (entry->d_name[1] == '.' && entry->d_name[2] == '\0'))) { // Skip ".."
             continue;
         }
-
-        else if(entry->d_type == DT_DIR){ // If entry is a directory get that directory's contents
+        else if(entry->d_type == DT_DIR) { // If entry is a directory get that directory's contents
             char *new_relative_path = malloc(strlen(relative_path) + 1 + strlen(entry->d_name) + 1);
-            sprintf(new_relative_path, "%s/%s", relative_path, entry->d_name);
-            printf("%s/\n", new_relative_path);
-            read_directory(path, new_relative_path);
-            free(new_relative_path);
-        }   
+            if (strlen(relative_path) == 0)
+                sprintf(new_relative_path, "%s", entry->d_name);
+            else
+                sprintf(new_relative_path, "%s/%s", relative_path, entry->d_name);
 
-        else{ // If entry is a file print its name
-            printf("%s/%s\n", relative_path, entry->d_name);
-            
-            // compute its sha256 hash
-            char *full_file_path = malloc(strlen(relative_path) + 1 + strlen(path) + 1 + strlen(entry->d_name) + 1);
+            read_directory(path, new_relative_path, head, tail);
+            free(new_relative_path);
+        } 
+        else {
+            char *full_file_path;
+            if (strlen(relative_path) == 0)
+                full_file_path = malloc(strlen(path) + 1 + strlen(entry->d_name) + 1);
+            else
+                full_file_path = malloc(strlen(path) + 1 + strlen(relative_path) + 1 + strlen(entry->d_name) + 1);
+
             if (strlen(relative_path) == 0)
                 sprintf(full_file_path, "%s/%s", path, entry->d_name);
             else
                 sprintf(full_file_path, "%s/%s/%s", path, relative_path, entry->d_name);
+
             unsigned char file_hash[SHA256_DIGEST_LENGTH];
-            
-            if (compute_sha256(full_file_path, file_hash) != 1 ){
-                printf("Error computing SHA-256 for file: %s\n", full_file_path);
-            }
-            else{
-                // Check if Hash already exists in the list
-                HashNode* temp = dir1_hash_list;
-                while (temp != NULL) {
+            if (compute_sha256(full_file_path, file_hash) == 1) {
+                // check duplicates in this list
+                HashNode *temp = *head;
+                int duplicate = 0;
+                while (temp) {
                     if (memcmp(temp->hash, file_hash, SHA256_DIGEST_LENGTH) == 0) {
-                        printf("Duplicate found: %s and %s\n", temp->filepath, full_file_path);
+                        duplicate = 1;
                         break;
                     }
                     temp = temp->next;
                 }
 
-                if (temp == NULL){ // No duplicate found, add the hash to list
-                    HashNode* new_node = create_hash_node(file_hash, full_file_path);
-
-                    if (dir1_hash_list == NULL) {
-                        dir1_hash_list = new_node;
-                        dir1_end_node = new_node;
+                if (!duplicate) {
+                    HashNode *new_node = create_hash_node(file_hash, full_file_path);
+                    if (!*head) {
+                        *head = *tail = new_node;
                     } else {
-                        dir1_end_node->next = new_node;
-                        dir1_end_node = new_node;
+                        (*tail)->next = new_node;
+                        *tail = new_node;
                     }
-                }    
+                }
             }
             free(full_file_path);
         }
-        
-    } 
+    }
     closedir(dir);
     return 1;
 }
@@ -148,20 +143,112 @@ void print_hash_list(HashNode *head) {
     }
 }
 
+void field_functions(const char *command, HashNode *dir1_hash_list, HashNode *dir2_hash_list){
+
+    if (strcmp(command, "display") == 0) {
+        // display files in list 1 that are also in list 2
+        HashNode *temp1 = dir1_hash_list;
+        while (temp1) {
+            HashNode *temp2 = dir2_hash_list;
+            while (temp2) {
+                if (memcmp(temp1->hash, temp2->hash, SHA256_DIGEST_LENGTH) == 0) {
+                    printf("Hash: ");
+                    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
+                        printf("%02x", temp1->hash[i]);
+                    }
+                    // Print file path
+                    printf("  File: %s\n", temp1->filepath);
+                }
+                temp2 = temp2->next; // advance inner loop
+            }
+            temp1 = temp1->next; // advance outer loop
+        }
+    } 
+    else if (strcmp(command, "delete") == 0) {
+        // delete files in list 1 that are also in list 2
+        HashNode *temp1 = dir1_hash_list;
+        while (temp1) {
+            HashNode *temp2 = dir2_hash_list;
+            while (temp2) {
+                if (memcmp(temp1->hash, temp2->hash, SHA256_DIGEST_LENGTH) == 0) {
+                    if (remove(temp1->filepath) == 0) {
+                        printf("Deleted: %s\n", temp1->filepath);
+                    } else {
+                        printf("Error Deleating: %s", temp1->filepath);
+                    }
+                    break;
+                }
+                temp2 = temp2->next;
+            }
+            temp1 = temp1->next;
+        }
+    } 
+    else if (strcmp(command, "copy") == 0) {
+        // copy files in list 1 that are not in list 2 to a new directory
+        HashNode *temp1 = dir1_hash_list;
+        while (temp1) {
+            int found = 0;
+            HashNode *temp2 = dir2_hash_list;
+            while (temp2) {
+                if (memcmp(temp1->hash, temp2->hash, SHA256_DIGEST_LENGTH) == 0) {
+                    found = 1;
+                    break;
+                }
+                temp2 = temp2->next;
+            }
+            if (!found) {
+                printf("Would copy: %s\n", temp1->filepath);
+                // Implement copy logic here
+            }
+            temp1 = temp1->next;
+        }
+    } 
+    else {
+        printf("Invalid command\n");
+    }
+
+}
 
 int main() {
+    HashNode *dir1_hash_list = NULL;
+    HashNode *dir1_end_node = NULL;
+    HashNode *dir2_hash_list = NULL;
+    HashNode *dir2_end_node = NULL;
+
+    // Get user input for command and directory paths
+    char command[8];
+    printf("Enter command (display, delete, or copy): ");
+    scanf("%7s", command);
+
     char path[256];
     printf("Enter a file path: ");
     scanf("%255s", path);
 
     char relative_path[] = "";
-    if (read_directory(path, relative_path) != 1) {
+    if (read_directory(path, relative_path, &dir1_hash_list, &dir1_end_node) != 1) {
         perror("Error reading directory");
         return -1;
     }
 
-    print_hash_list(dir1_hash_list);
+    printf("Enter seccond file path: ");
+    scanf("%255s", path);
 
+    if (read_directory(path, relative_path, &dir2_hash_list, &dir2_end_node) != 1) {
+        perror("Error reading directory");
+        return -1;
+    }
+
+    // Preform the desired user command
+    printf("\n");
+    field_functions(command, dir1_hash_list, dir2_hash_list);
+
+    
+    // tests to verify hash lists
+    // print_hash_list(dir1_hash_list);
+    // print_hash_list(dir2_hash_list);
+
+
+    // Free allocated memory
     free_hash_list(dir1_hash_list);
     dir1_end_node = NULL;
     free_hash_list(dir2_hash_list);
