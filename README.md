@@ -50,50 +50,95 @@ gcc -Wno-deprecated-declarations -I/opt/homebrew/opt/openssl@3/include -L/opt/ho
 ## Function Descriptions
 
 ### `HashNode* create_hash_node(unsigned char hash[SHA256_DIGEST_LENGTH], const char *filepath)`  
-Creates a new linked list node storing a file’s SHA-256 hash and its file path.  
+**Functionality:**  
+Creates a new linked list node to store a file’s SHA-256 hash and its file path.  
+
+**Arguments:**  
+- `hash`: SHA-256 hash of the file (32 bytes)  
+- `filepath`: Path to the file  
+
+**Results:**  
+Returns a pointer to the newly created `HashNode`. Returns `NULL` if memory allocation fails.  
 
 ---
 
 ### `void free_hash_list(HashNode *head)`  
-Frees the memory of an entire hash linked list, including file path strings.  
+**Functionality:**  
+Frees memory allocated for a linked list of hash nodes.  
+
+**Arguments:**  
+- `head`: Pointer to the head of the linked list  
+
+**Results:**  
+All nodes and their associated file path strings are freed. No return value.  
 
 ---
 
 ### `int compute_sha256(const char *filepath, unsigned char hash[SHA256_DIGEST_LENGTH])`  
-Computes the SHA-256 hash of a given file. Reads the file in 8KB chunks. Returns `1` on success, `-1` on failure.  
+**Functionality:**  
+Computes the SHA-256 hash of a file by reading it in 8KB chunks.  
+
+**Arguments:**  
+- `filepath`: Path to the file to hash  
+- `hash`: Buffer to store the resulting SHA-256 hash  
+
+**Results:**  
+Returns `1` on success, `-1` if the file cannot be opened.  
 
 ---
 
 ### `int read_directory(const char *path, const char *relative_path, HashNode **head, HashNode **tail)`  
-Recursively reads a directory, computes SHA-256 hashes of all files, and adds them to a linked list. Skips duplicate hashes within the same directory list.  
+**Functionality:**  
+Recursively reads all files in a directory and subdirectories, computes SHA-256 hashes, and adds unique hashes to a linked list.  
 
-- `path`: Root directory  
-- `relative_path`: Relative subdirectory path during recursion  
-- `head`/`tail`: Pointers to the linked list of file hashes  
+**Arguments:**  
+- `path`: Root directory path  
+- `relative_path`: Current relative path during recursion  
+- `head`: Pointer to the head of the hash list  
+- `tail`: Pointer to the tail of the hash list  
+
+**Results:**  
+Returns `1` on success, `-1` if the directory cannot be opened. Populates the linked list with unique file hashes.  
 
 ---
 
 ### `void print_hash_list(HashNode *head)`  
-Prints all hashes and file paths in a linked list. Shows the hash in hexadecimal format.  
+**Functionality:**  
+Prints all nodes in a hash list, including SHA-256 hashes and file paths.  
+
+**Arguments:**  
+- `head`: Pointer to the head of the linked list  
+
+**Results:**  
+Displays each file’s hash in hexadecimal and its path. Prints a message if the list is empty.  
 
 ---
 
 ### `void field_functions(const char *command, HashNode *dir1_hash_list, HashNode *dir2_hash_list)`  
-Performs operations based on the user’s command:  
+**Functionality:**  
+Performs operations (`display`, `delete`, or `copy`) on two directories based on file hashes.  
 
-- `display`: Lists files in the first directory that have the same hash as files in the second directory  
-- `delete`: Deletes files in the first directory that are also present in the second directory  
-- `copy`: Lists files in the first directory that do not exist in the second directory (copy logic can be added later)  
+**Arguments:**  
+- `command`: User-specified operation (`display`, `delete`, or `copy`)  
+- `dir1_hash_list`: Hash list of the first directory  
+- `dir2_hash_list`: Hash list of the second directory  
+
+**Results:**  
+- `display`: Prints files in directory 1 that are duplicates in directory 2  
+- `delete`: Deletes files in directory 1 that exist in directory 2  
+- `copy`: Prints files in directory 1 that are not in directory 2 (copying not yet implemented)  
 
 ---
 
 ### `int main()`  
-- Prompts the user for a command and two directory paths  
-- Builds SHA-256 hash linked lists for each directory  
-- Calls `field_functions` to perform the requested operation  
-- Frees memory for the hash lists  
+**Functionality:**  
+Main program flow. Prompts the user for input, builds hash lists for two directories, performs the selected operation, and frees memory.  
 
----
+**Arguments:**  
+None  
+
+**Results:**  
+Executes the program workflow and returns `0` on success, `-1` on error reading directories.  
 
 ## References
 

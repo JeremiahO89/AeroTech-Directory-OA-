@@ -4,27 +4,31 @@
 #include <dirent.h>
 #include <openssl/sha.h>
 
+// Linked list node to store file hash and path
 typedef struct HashNode {
     unsigned char hash[SHA256_DIGEST_LENGTH];
     char *filepath;
     struct HashNode *next;
 } HashNode;
 
+// Create a new hash node
 HashNode* create_hash_node(unsigned char hash[SHA256_DIGEST_LENGTH], const char *filepath) {
     HashNode *new_node = malloc(sizeof(HashNode));
     memcpy(new_node->hash, hash, SHA256_DIGEST_LENGTH);
 
+    // Copy filepath string
     new_node->filepath = malloc(strlen(filepath) + 1);
     if (!new_node->filepath) {
-        free(new_node);
+        free(new_node); // clean up if malloc fails
         return NULL;
     }
     memcpy(new_node->filepath, filepath, strlen(filepath) + 1);
     
-    new_node->next = NULL;
+    new_node->next = NULL; // end of list for now
     return new_node; 
 }
 
+// Free the linked list
 void free_hash_list(HashNode *head) {
     while (head) {
         HashNode *tmp = head;
@@ -34,6 +38,7 @@ void free_hash_list(HashNode *head) {
     }
 }
 
+// Compute SHA-256 hash for a given file
 int compute_sha256(const char *filepath, unsigned char hash[SHA256_DIGEST_LENGTH]) {
     FILE *file = fopen(filepath, "rb");
     if (!file) return -1;
@@ -51,7 +56,9 @@ int compute_sha256(const char *filepath, unsigned char hash[SHA256_DIGEST_LENGTH
     return 1;
 }
 
+// Recursively read directory and hash all files
 int read_directory(const char *path, const char *relative_path, HashNode **head, HashNode **tail) {
+    // Make and load the full_dir_path
     char *full_path = malloc(strlen(path) + 1 + strlen(relative_path) + 1);
     if (strlen(relative_path) == 0)
         sprintf(full_path, "%s", path);
@@ -60,19 +67,20 @@ int read_directory(const char *path, const char *relative_path, HashNode **head,
 
     DIR *dir = opendir(full_path);
     free(full_path);
-
     if (!dir) {
         printf("No Directory found at: %s/%s\n", path, relative_path);
         return -1;
     }
 
+    // Iterate through directory entries
     struct dirent *entry;
     while ((entry = readdir(dir)) != NULL) {
-        if (entry->d_name[0] == '.' && (entry->d_name[1] == '\0' || // Skip "."
-            (entry->d_name[1] == '.' && entry->d_name[2] == '\0'))) { // Skip ".."
+        // skip . and ..
+        if (entry->d_name[0] == '.' && (entry->d_name[1] == '\0' || 
+            (entry->d_name[1] == '.' && entry->d_name[2] == '\0'))) {
             continue;
         }
-        else if(entry->d_type == DT_DIR) { // If entry is a directory get that directory's contents
+        else if(entry->d_type == DT_DIR) { // recurse into subdirectory
             char *new_relative_path = malloc(strlen(relative_path) + 1 + strlen(entry->d_name) + 1);
             if (strlen(relative_path) == 0)
                 sprintf(new_relative_path, "%s", entry->d_name);
@@ -82,7 +90,7 @@ int read_directory(const char *path, const char *relative_path, HashNode **head,
             read_directory(path, new_relative_path, head, tail);
             free(new_relative_path);
         } 
-        else {
+        else { // regular file - compute hash
             char *full_file_path;
             if (strlen(relative_path) == 0)
                 full_file_path = malloc(strlen(path) + 1 + strlen(entry->d_name) + 1);
@@ -96,7 +104,7 @@ int read_directory(const char *path, const char *relative_path, HashNode **head,
 
             unsigned char file_hash[SHA256_DIGEST_LENGTH];
             if (compute_sha256(full_file_path, file_hash) == 1) {
-                // check duplicates in this list
+                // check if duplicates already in list
                 HashNode *temp = *head;
                 int duplicate = 0;
                 while (temp) {
@@ -107,6 +115,7 @@ int read_directory(const char *path, const char *relative_path, HashNode **head,
                     temp = temp->next;
                 }
 
+                // add to node list if not duplicate
                 if (!duplicate) {
                     HashNode *new_node = create_hash_node(file_hash, full_file_path);
                     if (!*head) {
@@ -124,6 +133,7 @@ int read_directory(const char *path, const char *relative_path, HashNode **head,
     return 1;
 }
 
+// Print function for debugging
 void print_hash_list(HashNode *head) {
     if (!head) {
         printf("Hash list is empty.\n");
@@ -132,21 +142,21 @@ void print_hash_list(HashNode *head) {
 
     HashNode *current = head;
     while (current) {
-        // Print SHA-256 hash as hex
+        // print hash as hex
         printf("Hash: ");
         for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
             printf("%02x", current->hash[i]);
         }
-        // Print file path
         printf("  File: %s\n", current->filepath);
         current = current->next;
     }
 }
 
+// Perform command: display, delete, copy
 void field_functions(const char *command, HashNode *dir1_hash_list, HashNode *dir2_hash_list){
 
     if (strcmp(command, "display") == 0) {
-        // display files in list 1 that are also in list 2
+        // display duplicates
         HashNode *temp1 = dir1_hash_list;
         while (temp1) {
             HashNode *temp2 = dir2_hash_list;
@@ -156,16 +166,15 @@ void field_functions(const char *command, HashNode *dir1_hash_list, HashNode *di
                     for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
                         printf("%02x", temp1->hash[i]);
                     }
-                    // Print file path
                     printf("  File: %s\n", temp1->filepath);
                 }
-                temp2 = temp2->next; // advance inner loop
+                temp2 = temp2->next;
             }
-            temp1 = temp1->next; // advance outer loop
+            temp1 = temp1->next;
         }
     } 
     else if (strcmp(command, "delete") == 0) {
-        // delete files in list 1 that are also in list 2
+        // remove duplicates from dir1
         HashNode *temp1 = dir1_hash_list;
         while (temp1) {
             HashNode *temp2 = dir2_hash_list;
@@ -174,7 +183,7 @@ void field_functions(const char *command, HashNode *dir1_hash_list, HashNode *di
                     if (remove(temp1->filepath) == 0) {
                         printf("Deleted: %s\n", temp1->filepath);
                     } else {
-                        printf("Error Deleating: %s", temp1->filepath);
+                        printf("Error Deleting: %s", temp1->filepath);
                     }
                     break;
                 }
@@ -184,7 +193,7 @@ void field_functions(const char *command, HashNode *dir1_hash_list, HashNode *di
         }
     } 
     else if (strcmp(command, "copy") == 0) {
-        // copy files in list 1 that are not in list 2 to a new directory
+        // list files that would be copied from dir1 to dir2
         HashNode *temp1 = dir1_hash_list;
         while (temp1) {
             int found = 0;
@@ -198,7 +207,7 @@ void field_functions(const char *command, HashNode *dir1_hash_list, HashNode *di
             }
             if (!found) {
                 printf("Would copy: %s\n", temp1->filepath);
-                // Implement copy logic here
+                // actual copy not implemented yet
             }
             temp1 = temp1->next;
         }
@@ -215,13 +224,13 @@ int main() {
     HashNode *dir2_hash_list = NULL;
     HashNode *dir2_end_node = NULL;
 
-    // Get user input for command and directory paths
+    // Get user input
     char command[8];
     printf("Enter command (display, delete, or copy): ");
     scanf("%7s", command);
 
     char path[256];
-    printf("Enter a file path: ");
+    printf("Enter first file path: ");
     scanf("%255s", path);
 
     char relative_path[] = "";
@@ -230,7 +239,7 @@ int main() {
         return -1;
     }
 
-    printf("Enter seccond file path: ");
+    printf("Enter second file path: ");
     scanf("%255s", path);
 
     if (read_directory(path, relative_path, &dir2_hash_list, &dir2_end_node) != 1) {
@@ -238,17 +247,11 @@ int main() {
         return -1;
     }
 
-    // Preform the desired user command
+    // Perform command
     printf("\n");
     field_functions(command, dir1_hash_list, dir2_hash_list);
 
-    
-    // tests to verify hash lists
-    // print_hash_list(dir1_hash_list);
-    // print_hash_list(dir2_hash_list);
-
-
-    // Free allocated memory
+    // free memory
     free_hash_list(dir1_hash_list);
     dir1_end_node = NULL;
     free_hash_list(dir2_hash_list);
