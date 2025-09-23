@@ -129,9 +129,6 @@ int read_directory(const char *path, const char *relative_path) {
     return 1;
 }
 
-
-
-
 void print_hash_list(HashNode *head) {
     if (!head) {
         printf("Hash list is empty.\n");
