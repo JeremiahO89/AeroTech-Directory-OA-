@@ -188,7 +188,7 @@ int copy_file(const char *src, const char *dest){
     fclose(dest_file);
 
     printf("Copied file from %s\n", src);
-    printf("To %s\n------------------------------------\n", dest);
+    printf("To %s\n-----------------------------------------------------\n", dest);
     return 1;
 }
 
@@ -250,11 +250,7 @@ void field_functions(const char *command, HashNode *dir1_hash_list, HashNode *di
             HashNode *temp2 = dir2_hash_list;
             while (temp2) {
                 if (memcmp(temp1->hash, temp2->hash, SHA256_DIGEST_LENGTH) == 0) {
-                    printf("Hash: ");
-                    for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
-                        printf("%02x", temp1->hash[i]);
-                    }
-                    printf("  File: %s\n", temp1->filepath);
+                    printf("File: %s\n", temp1->filepath);
                 }
                 temp2 = temp2->next;
             }
@@ -316,23 +312,35 @@ int main() {
     HashNode *dir2_end_node = NULL;
 
     // Get user input
-    char command[8];
+    char command[9];
     printf("Enter command (display, delete, or copy): ");
-    scanf("%7s", command);
+    if (!fgets(command, sizeof(command), stdin)) {
+        perror("Error reading command");
+        return -1;
+    }
+    // remove trailing newline
+    command[strcspn(command, "\n")] = '\0';
 
     char path1[256];
     printf("Enter first file path: ");
-    scanf("%255s", path1);
-
-
+    if (!fgets(path1, sizeof(path1), stdin)) {
+        perror("Error reading input");
+        return -1;
+    }
+    // remove trailing newline
+    path1[strcspn(path1, "\n")] = '\0';
     if (read_directory(path1, &dir1_hash_list, &dir1_end_node) != 1) {
         perror("Error reading directory");
         return -1;
     }
+
     char path2[256];
     printf("Enter second file path: ");
-    scanf("%255s", path2);
-
+    if (!fgets(path2, sizeof(path2), stdin)) {
+        perror("Error reading input");
+        return -1;
+    }
+    path2[strcspn(path2, "\n")] = '\0';
     if (read_directory(path2, &dir2_hash_list, &dir2_end_node) != 1) {
         perror("Error reading directory");
         return -1;
