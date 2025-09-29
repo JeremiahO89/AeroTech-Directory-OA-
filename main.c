@@ -4,6 +4,14 @@
 #include <dirent.h>
 #include <openssl/sha.h>
 
+#ifdef _WIN32
+#include <direct.h>
+#define mkdir(path, mode) _mkdir(path)
+#else
+#include <sys/stat.h>
+#include <sys/types.h>
+#endif
+
 // Linked list node to store file hash and path
 typedef struct HashNode {
     unsigned char hash[SHA256_DIGEST_LENGTH];
@@ -172,22 +180,46 @@ int copy_file(const char *src, const char *dest){
 
     printf("Copied file from %s\n", src);
     printf("To %s\n------------------------------------\n", dest);
-
     return 1;
 }
 
-int make_path_and_copy_file(const char *src, const char *dest_root){
-    // Extract filename from src
-    char *file_name = strrchr(src, '/');
-    if (!file_name) {
-        file_name = (char *)src; // no directory part
+int dir_exists(const char *path) {
+    DIR *dir = opendir(path);
+    if (dir) {
+        closedir(dir);
+        return 1; // directory exists
     } else {
-        file_name++; // move past the '/'
+        return 0; // directory does not exist
     }
-    // Create full destination path
-    char *dest_path = malloc(strlen(dest_root) + 1 + strlen(file_name) + 1);
+}
+
+int make_path_and_copy_file(const char *src, const char *src_root, const char *dest_root){
+    // Build the file structure in dest_root
+    // Find the point where src diverges from src_root
+    int index = 0;
+    while (src[index] == src_root[index] && src[index] != '\0') {
+        index++;
+    }
+    const char *relative_path = src + index;
+    
+    size_t total_len = strlen(dest_root) + 1 + strlen(relative_path) + 1;
+    char *dest_path = malloc(total_len);
     if (!dest_path) return -1; // malloc failed
-    sprintf(dest_path, "%s/%s", dest_root, file_name);
+    sprintf(dest_path, "%s%s", dest_root, relative_path);
+
+    for (char *p = dest_path + strlen(dest_root) + 1; *p != '\0'; p++) {
+        if (*p == '/') {
+            *p = '\0'; // temporarily terminate string
+            if (!dir_exists(dest_path)) {
+                if (mkdir(dest_path, 0777) != 0) { //0777 is rwxrwxrwx
+                    printf("Error creating directory: %s\n", dest_path);
+                    free(dest_path);
+                    return -1;
+                }
+            }
+            *p = '/'; // restore slash
+        }
+    }
     
     // Copy file
     if (copy_file(src, dest_path) != 1) {
@@ -199,9 +231,8 @@ int make_path_and_copy_file(const char *src, const char *dest_root){
     return 1;
 }
 
-
 // Perform command: display, delete, copy
-void field_functions(const char *command, HashNode *dir1_hash_list, HashNode *dir2_hash_list, const char *dir2_path) {
+void field_functions(const char *command, HashNode *dir1_hash_list, HashNode *dir2_hash_list, const char *dir1_path, const char *dir2_path) {
 
     if (strcmp(command, "display") == 0) {
         // display duplicates
@@ -255,8 +286,7 @@ void field_functions(const char *command, HashNode *dir1_hash_list, HashNode *di
             }
             if (!found) {
                 // printf("Would copy: %s\n", temp1->filepath);
-                // actual copy not implemented yet
-                if (!make_path_and_copy_file(temp1->filepath, dir2_path)) {
+                if (!make_path_and_copy_file(temp1->filepath, dir1_path, dir2_path)) {
                     printf("Error creating file path for: %s\n", temp1->filepath);
                 }
             }
@@ -281,27 +311,27 @@ int main() {
     printf("Enter command (display, delete, or copy): ");
     scanf("%7s", command);
 
-    char path[256];
+    char path1[256];
     printf("Enter first file path: ");
-    scanf("%255s", path);
+    scanf("%255s", path1);
 
     char relative_path[] = "";
-    if (read_directory(path, relative_path, &dir1_hash_list, &dir1_end_node) != 1) {
+    if (read_directory(path1, relative_path, &dir1_hash_list, &dir1_end_node) != 1) {
         perror("Error reading directory");
         return -1;
     }
-
+    char path2[256];
     printf("Enter second file path: ");
-    scanf("%255s", path);
+    scanf("%255s", path2);
 
-    if (read_directory(path, relative_path, &dir2_hash_list, &dir2_end_node) != 1) {
+    if (read_directory(path2, relative_path, &dir2_hash_list, &dir2_end_node) != 1) {
         perror("Error reading directory");
         return -1;
     }
 
     // Perform command
     printf("\n");
-    field_functions(command, dir1_hash_list, dir2_hash_list, path);
+    field_functions(command, dir1_hash_list, dir2_hash_list, path1, path2);
 
     // free memory
     free_hash_list(dir1_hash_list);
