@@ -1,1 +1,1 @@
-This is a test file to read inside of test_dir_copy. This has changes
+This is a test file to read inside of test_dir.

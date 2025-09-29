@@ -65,18 +65,15 @@ int compute_sha256(const char *filepath, unsigned char hash[SHA256_DIGEST_LENGTH
 }
 
 // Recursively read directory and hash all files
-int read_directory(const char *path, const char *relative_path, HashNode **head, HashNode **tail) {
+int read_directory(const char *path, HashNode **head, HashNode **tail) {
     // Make and load the full_dir_path
-    char *full_path = malloc(strlen(path) + 1 + strlen(relative_path) + 1);
-    if (strlen(relative_path) == 0)
-        sprintf(full_path, "%s", path);
-    else
-        sprintf(full_path, "%s/%s", path, relative_path);
+    char *full_path = malloc(strlen(path) + 1);
+    sprintf(full_path, "%s", path);
 
     DIR *dir = opendir(full_path);
     free(full_path);
     if (!dir) {
-        printf("No Directory found at: %s/%s\n", path, relative_path);
+        printf("No Directory found at: %s/\n", path);
         return -1;
     }
 
@@ -89,26 +86,15 @@ int read_directory(const char *path, const char *relative_path, HashNode **head,
             continue;
         }
         else if(entry->d_type == DT_DIR) { // recurse into subdirectory
-            char *new_relative_path = malloc(strlen(relative_path) + 1 + strlen(entry->d_name) + 1);
-            if (strlen(relative_path) == 0)
-                sprintf(new_relative_path, "%s", entry->d_name);
-            else
-                sprintf(new_relative_path, "%s/%s", relative_path, entry->d_name);
-
-            read_directory(path, new_relative_path, head, tail);
-            free(new_relative_path);
+            char *new_path = malloc(strlen(path) + 1 + strlen(entry->d_name) + 1);
+            sprintf(new_path, "%s/%s", path, entry->d_name);
+            read_directory(new_path, head, tail);
+            free(new_path);
         } 
         else { // regular file - compute hash
             char *full_file_path;
-            if (strlen(relative_path) == 0)
-                full_file_path = malloc(strlen(path) + 1 + strlen(entry->d_name) + 1);
-            else
-                full_file_path = malloc(strlen(path) + 1 + strlen(relative_path) + 1 + strlen(entry->d_name) + 1);
-
-            if (strlen(relative_path) == 0)
-                sprintf(full_file_path, "%s/%s", path, entry->d_name);
-            else
-                sprintf(full_file_path, "%s/%s/%s", path, relative_path, entry->d_name);
+            full_file_path = malloc(strlen(path) + 1 + strlen(entry->d_name) + 1);
+            sprintf(full_file_path, "%s/%s", path, entry->d_name);
 
             unsigned char file_hash[SHA256_DIGEST_LENGTH];
             if (compute_sha256(full_file_path, file_hash) == 1) {
@@ -163,7 +149,30 @@ void print_hash_list(HashNode *head) {
 //Copy file from src to dest
 int copy_file(const char *src, const char *dest){
     FILE *src_file = fopen(src, "rb");
-    FILE *dest_file = fopen(dest, "wb");
+
+    FILE *dest_check = fopen(dest, "r");
+    FILE *dest_file;
+    if (dest_check) {
+        // File already exists
+        fclose(dest_check);
+        char *new_dest = malloc(strlen(dest) + 6); // extra space for "_copy" and null terminator
+        sprintf(new_dest, "%s", dest);
+        char *p = strrchr(new_dest, '.');
+        if (p) {
+            // Insert "_copy" before the file extension
+            memmove(p + 5, p, strlen(p) + 1); // +1 for null terminator
+            memcpy(p, "_copy", 5);
+        } else {
+            // No file extension, just append "_copy"
+            strcat(new_dest, "_copy");
+        }
+        dest_file = fopen(new_dest, "wb");
+        free(new_dest);
+    }
+    else{
+        dest_file = fopen(dest, "wb");
+    }
+
     if (!src_file || !dest_file) {
         if (src_file) fclose(src_file);
         if (dest_file) fclose(dest_file);
@@ -315,8 +324,8 @@ int main() {
     printf("Enter first file path: ");
     scanf("%255s", path1);
 
-    char relative_path[] = "";
-    if (read_directory(path1, relative_path, &dir1_hash_list, &dir1_end_node) != 1) {
+
+    if (read_directory(path1, &dir1_hash_list, &dir1_end_node) != 1) {
         perror("Error reading directory");
         return -1;
     }
@@ -324,7 +333,7 @@ int main() {
     printf("Enter second file path: ");
     scanf("%255s", path2);
 
-    if (read_directory(path2, relative_path, &dir2_hash_list, &dir2_end_node) != 1) {
+    if (read_directory(path2, &dir2_hash_list, &dir2_end_node) != 1) {
         perror("Error reading directory");
         return -1;
     }
