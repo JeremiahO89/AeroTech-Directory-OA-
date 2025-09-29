@@ -152,8 +152,56 @@ void print_hash_list(HashNode *head) {
     }
 }
 
+//Copy file from src to dest
+int copy_file(const char *src, const char *dest){
+    FILE *src_file = fopen(src, "rb");
+    FILE *dest_file = fopen(dest, "wb");
+    if (!src_file || !dest_file) {
+        if (src_file) fclose(src_file);
+        if (dest_file) fclose(dest_file);
+        return -1;
+    }
+    char buffer[4096];
+    size_t bytes;
+    while ((bytes = fread(buffer, 1, sizeof(buffer), src_file)) > 0) {
+        fwrite(buffer, 1, bytes, dest_file);
+    }
+
+    fclose(src_file);
+    fclose(dest_file);
+
+    printf("Copied file from %s\n", src);
+    printf("To %s\n------------------------------------\n", dest);
+
+    return 1;
+}
+
+int make_path_and_copy_file(const char *src, const char *dest_root){
+    // Extract filename from src
+    char *file_name = strrchr(src, '/');
+    if (!file_name) {
+        file_name = (char *)src; // no directory part
+    } else {
+        file_name++; // move past the '/'
+    }
+    // Create full destination path
+    char *dest_path = malloc(strlen(dest_root) + 1 + strlen(file_name) + 1);
+    if (!dest_path) return -1; // malloc failed
+    sprintf(dest_path, "%s/%s", dest_root, file_name);
+    
+    // Copy file
+    if (copy_file(src, dest_path) != 1) {
+        printf("Error copying file to: %s\n", dest_path);
+        free(dest_path); 
+        return -1;
+    }
+    free(dest_path);        
+    return 1;
+}
+
+
 // Perform command: display, delete, copy
-void field_functions(const char *command, HashNode *dir1_hash_list, HashNode *dir2_hash_list){
+void field_functions(const char *command, HashNode *dir1_hash_list, HashNode *dir2_hash_list, const char *dir2_path) {
 
     if (strcmp(command, "display") == 0) {
         // display duplicates
@@ -206,8 +254,11 @@ void field_functions(const char *command, HashNode *dir1_hash_list, HashNode *di
                 temp2 = temp2->next;
             }
             if (!found) {
-                printf("Would copy: %s\n", temp1->filepath);
+                // printf("Would copy: %s\n", temp1->filepath);
                 // actual copy not implemented yet
+                if (!make_path_and_copy_file(temp1->filepath, dir2_path)) {
+                    printf("Error creating file path for: %s\n", temp1->filepath);
+                }
             }
             temp1 = temp1->next;
         }
@@ -217,6 +268,7 @@ void field_functions(const char *command, HashNode *dir1_hash_list, HashNode *di
     }
 
 }
+
 
 int main() {
     HashNode *dir1_hash_list = NULL;
@@ -249,7 +301,7 @@ int main() {
 
     // Perform command
     printf("\n");
-    field_functions(command, dir1_hash_list, dir2_hash_list);
+    field_functions(command, dir1_hash_list, dir2_hash_list, path);
 
     // free memory
     free_hash_list(dir1_hash_list);
